@@ -1,20 +1,29 @@
 package main
 
 import (
+	"github.com/hairutdin/metrics-service/handlers"
+	"github.com/hairutdin/metrics-service/storage"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestServer(t *testing.T) {
-	ts := httptest.NewServer(http.DefaultServeMux)
-	defer ts.Close()
+	memStorage := storage.NewMemStorage()
+	metricsHandler := handlers.NewMetricsHandler(memStorage)
 
-	resp, err := http.Get(ts.URL + "/update/gauge/test_metric/10.0")
+	http.HandleFunc("/update/", metricsHandler.HandleUpdate)
+
+	req, err := http.NewRequest("POST", "/update/gauge/test_metric/12.5", nil)
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200 OK, got %v", resp.StatusCode)
+
+	rr := httptest.NewRecorder()
+
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Expected status 200 OK, got %v", status)
 	}
 }
