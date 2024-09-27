@@ -1,10 +1,13 @@
 package handlers
 
 import (
-	"github.com/hairutdin/metrics-service/storage"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/hairutdin/metrics-service/storage"
 )
 
 type MetricsHandler struct {
@@ -15,6 +18,47 @@ func NewMetricsHandler(s storage.MetricsStorage) *MetricsHandler {
 	return &MetricsHandler{storage: s}
 }
 
+// HandleGetValue handles GET requests to fetch a specific metric by type and name.
+func (h *MetricsHandler) HandleGetValue(w http.ResponseWriter, r *http.Request) {
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+
+	value, err := h.storage.GetMetric(metricType, metricName)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if metricType == "gauge" {
+		floatValue, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			http.Error(w, "Invalid gauge value", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("%s: %.1f\n", metricName, floatValue)))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("%s: %s\n", metricName, value)))
+}
+
+// HandleListMetrics handles GET requests to list all known metrics in HTML format.
+func (h *MetricsHandler) HandleListMetrics(w http.ResponseWriter, r *http.Request) {
+	metrics := h.storage.GetAllMetrics()
+
+	w.Header().Set("Content-Type", "text/html")
+	html := "<html><body><h1>Metrics</h1><ul>"
+	for name, value := range metrics {
+		html += fmt.Sprintf("<li>%s: %v</li>", name, value)
+	}
+	html += "</ul></body></html>"
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(html))
+}
+
+// HandleUpdate handles POST requests to update metrics (gauge/counter).
 func (h *MetricsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/update/"), "/")
 	if len(parts) != 3 {
