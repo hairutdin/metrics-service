@@ -19,6 +19,7 @@ cd metrics-service
 ```
 
 ## Prerequisites
+
 Make sure you have Go installed on your machine. You can download it from the official Go website.
 
 ## Usage
