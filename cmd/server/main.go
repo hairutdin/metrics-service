@@ -11,8 +11,15 @@ import (
 )
 
 func main() {
-	serverAddress := flag.String("a", "localhost:8080", "server address")
+	flagServerAddress := flag.String("a", "localhost:8080", "server address")
 	flag.Parse()
+
+	envServerAddress := os.Getenv("SERVER_ADDRESS")
+
+	serverAddress := *flagServerAddress
+	if envServerAddress != "" {
+		serverAddress = envServerAddress
+	}
 
 	if len(flag.Args()) > 0 {
 		fmt.Printf("Error: Unknown flags or arguments: %v\n", flag.Args())
@@ -28,8 +35,8 @@ func main() {
 	r.Get("/value/{type}/{name}", metricsHandler.HandleGetValue)
 	r.Get("/", metricsHandler.HandleListMetrics)
 
-	fmt.Printf("Server is running at http://%s\n", *serverAddress)
-	err := http.ListenAndServe(*serverAddress, r)
+	fmt.Printf("Server is running at http://%s\n", serverAddress)
+	err := http.ListenAndServe(serverAddress, r)
 	if err != nil {
 		fmt.Printf("Server failed to start: %v\n", err)
 	}
