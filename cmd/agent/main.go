@@ -102,11 +102,39 @@ func sendMetric(metricType, metricName string, value float64, serverAddress stri
 }
 
 func main() {
-	reportInterval := flag.Int("r", 10, "Report interval in seconds")
-	pollInterval := flag.Int("p", 2, "Poll interval in seconds")
-	serverAddress := flag.String("a", "localhost:8080", "server address")
-
+	flagReportInterval := flag.Int("r", 10, "Report interval in seconds")
+	flagPollInterval := flag.Int("p", 2, "Poll interval in seconds")
+	flagServerAddress := flag.String("a", "localhost:8080", "server address")
 	flag.Parse()
+
+	envReportInterval := os.Getenv("REPORT_INTERVAL")
+	envPollInterval := os.Getenv("POLL_INTERVAL")
+	envServerAddress := os.Getenv("SERVER_ADDRESS")
+
+	reportInterval := *flagReportInterval
+	if envReportInterval != "" {
+		if value, err := strconv.Atoi(envReportInterval); err == nil {
+			reportInterval = value
+		} else {
+			fmt.Printf("Error: Invalid value for REPORT_INTERVAL: %v\n", envReportInterval)
+			os.Exit(1)
+		}
+	}
+
+	pollInterval := *flagPollInterval
+	if envPollInterval != "" {
+		if value, err := strconv.Atoi(envPollInterval); err == nil {
+			pollInterval = value
+		} else {
+			fmt.Printf("Error: Invalid value for POLL_INTERVAL: %v\n", envPollInterval)
+			os.Exit(1)
+		}
+	}
+
+	serverAddress := *flagServerAddress
+	if envServerAddress != "" {
+		serverAddress = envServerAddress
+	}
 
 	if len(flag.Args()) > 0 {
 		fmt.Printf("Error: Unknown flags or arguments: %v\n", flag.Args())
@@ -118,43 +146,43 @@ func main() {
 	go func() {
 		for {
 			metrics.collectMetrics()
-			time.Sleep(time.Duration(*pollInterval) * time.Second)
+			time.Sleep(time.Duration(pollInterval) * time.Second)
 		}
 	}()
 
 	go func() {
 		for {
-			sendMetric("gauge", "Alloc", metrics.Alloc, *serverAddress)
-			sendMetric("gauge", "BuckHashSys", metrics.BuckHashSys, *serverAddress)
-			sendMetric("gauge", "Frees", metrics.Frees, *serverAddress)
-			sendMetric("gauge", "GCCPUFraction", metrics.GCCPUFraction, *serverAddress)
-			sendMetric("gauge", "GCSys", metrics.GCSys, *serverAddress)
-			sendMetric("gauge", "HeapAlloc", metrics.HeapAlloc, *serverAddress)
-			sendMetric("gauge", "HeapIdle", metrics.HeapIdle, *serverAddress)
-			sendMetric("gauge", "HeapInuse", metrics.HeapInuse, *serverAddress)
-			sendMetric("gauge", "HeapObjects", metrics.HeapObjects, *serverAddress)
-			sendMetric("gauge", "HeapReleased", metrics.HeapReleased, *serverAddress)
-			sendMetric("gauge", "HeapSys", metrics.HeapSys, *serverAddress)
-			sendMetric("gauge", "LastGC", metrics.LastGC, *serverAddress)
-			sendMetric("gauge", "Lookups", metrics.Lookups, *serverAddress)
-			sendMetric("gauge", "MCacheInuse", metrics.MCacheInuse, *serverAddress)
-			sendMetric("gauge", "MCacheSys", metrics.MCacheSys, *serverAddress)
-			sendMetric("gauge", "MSpanInuse", metrics.MSpanInuse, *serverAddress)
-			sendMetric("gauge", "MSpanSys", metrics.MSpanSys, *serverAddress)
-			sendMetric("gauge", "Mallocs", metrics.Mallocs, *serverAddress)
-			sendMetric("gauge", "NextGC", metrics.NextGC, *serverAddress)
-			sendMetric("gauge", "NumForcedGC", metrics.NumForcedGC, *serverAddress)
-			sendMetric("gauge", "NumGC", metrics.NumGC, *serverAddress)
-			sendMetric("gauge", "OtherSys", metrics.OtherSys, *serverAddress)
-			sendMetric("gauge", "PauseTotalNs", metrics.PauseTotalNs, *serverAddress)
-			sendMetric("gauge", "StackInuse", metrics.StackInuse, *serverAddress)
-			sendMetric("gauge", "StackSys", metrics.StackSys, *serverAddress)
-			sendMetric("gauge", "Sys", metrics.Sys, *serverAddress)
-			sendMetric("gauge", "TotalAlloc", metrics.TotalAlloc, *serverAddress)
+			sendMetric("gauge", "Alloc", metrics.Alloc, serverAddress)
+			sendMetric("gauge", "BuckHashSys", metrics.BuckHashSys, serverAddress)
+			sendMetric("gauge", "Frees", metrics.Frees, serverAddress)
+			sendMetric("gauge", "GCCPUFraction", metrics.GCCPUFraction, serverAddress)
+			sendMetric("gauge", "GCSys", metrics.GCSys, serverAddress)
+			sendMetric("gauge", "HeapAlloc", metrics.HeapAlloc, serverAddress)
+			sendMetric("gauge", "HeapIdle", metrics.HeapIdle, serverAddress)
+			sendMetric("gauge", "HeapInuse", metrics.HeapInuse, serverAddress)
+			sendMetric("gauge", "HeapObjects", metrics.HeapObjects, serverAddress)
+			sendMetric("gauge", "HeapReleased", metrics.HeapReleased, serverAddress)
+			sendMetric("gauge", "HeapSys", metrics.HeapSys, serverAddress)
+			sendMetric("gauge", "LastGC", metrics.LastGC, serverAddress)
+			sendMetric("gauge", "Lookups", metrics.Lookups, serverAddress)
+			sendMetric("gauge", "MCacheInuse", metrics.MCacheInuse, serverAddress)
+			sendMetric("gauge", "MCacheSys", metrics.MCacheSys, serverAddress)
+			sendMetric("gauge", "MSpanInuse", metrics.MSpanInuse, serverAddress)
+			sendMetric("gauge", "MSpanSys", metrics.MSpanSys, serverAddress)
+			sendMetric("gauge", "Mallocs", metrics.Mallocs, serverAddress)
+			sendMetric("gauge", "NextGC", metrics.NextGC, serverAddress)
+			sendMetric("gauge", "NumForcedGC", metrics.NumForcedGC, serverAddress)
+			sendMetric("gauge", "NumGC", metrics.NumGC, serverAddress)
+			sendMetric("gauge", "OtherSys", metrics.OtherSys, serverAddress)
+			sendMetric("gauge", "PauseTotalNs", metrics.PauseTotalNs, serverAddress)
+			sendMetric("gauge", "StackInuse", metrics.StackInuse, serverAddress)
+			sendMetric("gauge", "StackSys", metrics.StackSys, serverAddress)
+			sendMetric("gauge", "Sys", metrics.Sys, serverAddress)
+			sendMetric("gauge", "TotalAlloc", metrics.TotalAlloc, serverAddress)
 
-			sendMetric("counter", "PollCount", float64(metrics.PollCount), *serverAddress)
-			sendMetric("gauge", "RandomValue", metrics.RandomValue, *serverAddress)
-			time.Sleep(time.Duration(*reportInterval) * time.Second)
+			sendMetric("counter", "PollCount", float64(metrics.PollCount), serverAddress)
+			sendMetric("gauge", "RandomValue", metrics.RandomValue, serverAddress)
+			time.Sleep(time.Duration(reportInterval) * time.Second)
 		}
 	}()
 
