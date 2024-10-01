@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/hairutdin/metrics-service/handlers"
+	"github.com/hairutdin/metrics-service/internal/middleware"
 	"github.com/hairutdin/metrics-service/storage"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 )
@@ -15,7 +17,6 @@ func main() {
 	flag.Parse()
 
 	envServerAddress := os.Getenv("SERVER_ADDRESS")
-
 	serverAddress := *flagServerAddress
 	if envServerAddress != "" {
 		serverAddress = envServerAddress
@@ -28,6 +29,9 @@ func main() {
 
 	memStorage := storage.NewMemStorage()
 	r := chi.NewRouter()
+
+	logger := logrus.New()
+	r.Use(middleware.Logger(logger))
 
 	metricsHandler := handlers.NewMetricsHandler(memStorage)
 
