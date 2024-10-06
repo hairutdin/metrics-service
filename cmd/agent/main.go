@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -13,6 +14,13 @@ import (
 )
 
 type Metrics struct {
+	ID    string   `json:"id"`
+	MType string   `json:"type"`
+	Delta *int64   `json:"delta,omitempty"`
+	Value *float64 `json:"value,omitempty"`
+}
+
+type RuntimeMetrics struct {
 	Alloc         float64
 	BuckHashSys   float64
 	Frees         float64
@@ -49,7 +57,7 @@ func randomValue() float64 {
 	return rand.Float64()
 }
 
-func (m *Metrics) collectMetrics() {
+func (m *RuntimeMetrics) collectMetrics() {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
@@ -85,13 +93,25 @@ func (m *Metrics) collectMetrics() {
 	m.RandomValue = randomValue()
 }
 
-func sendMetric(metricType, metricName string, value float64, serverAddress string) {
-	url := "http://" + serverAddress + "/update/" + metricType + "/" + metricName + "/" + strconv.FormatFloat(value, 'f', 1, 64)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(nil))
+func sendMetric(metricType, metricName string, delta *int64, value *float64, serverAddress string) {
+	metric := Metrics{
+		ID:    metricName,
+		MType: metricType,
+		Delta: delta,
+		Value: value,
+	}
+
+	jsonData, err := json.Marshal(metric)
 	if err != nil {
 		panic(err)
 	}
-	req.Header.Set("Content-Type", "text/plain")
+
+	url := "http://" + serverAddress + "/update/"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -141,7 +161,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	metrics := &Metrics{}
+	metrics := &RuntimeMetrics{}
 
 	go func() {
 		for {
@@ -152,36 +172,36 @@ func main() {
 
 	go func() {
 		for {
-			sendMetric("gauge", "Alloc", metrics.Alloc, serverAddress)
-			sendMetric("gauge", "BuckHashSys", metrics.BuckHashSys, serverAddress)
-			sendMetric("gauge", "Frees", metrics.Frees, serverAddress)
-			sendMetric("gauge", "GCCPUFraction", metrics.GCCPUFraction, serverAddress)
-			sendMetric("gauge", "GCSys", metrics.GCSys, serverAddress)
-			sendMetric("gauge", "HeapAlloc", metrics.HeapAlloc, serverAddress)
-			sendMetric("gauge", "HeapIdle", metrics.HeapIdle, serverAddress)
-			sendMetric("gauge", "HeapInuse", metrics.HeapInuse, serverAddress)
-			sendMetric("gauge", "HeapObjects", metrics.HeapObjects, serverAddress)
-			sendMetric("gauge", "HeapReleased", metrics.HeapReleased, serverAddress)
-			sendMetric("gauge", "HeapSys", metrics.HeapSys, serverAddress)
-			sendMetric("gauge", "LastGC", metrics.LastGC, serverAddress)
-			sendMetric("gauge", "Lookups", metrics.Lookups, serverAddress)
-			sendMetric("gauge", "MCacheInuse", metrics.MCacheInuse, serverAddress)
-			sendMetric("gauge", "MCacheSys", metrics.MCacheSys, serverAddress)
-			sendMetric("gauge", "MSpanInuse", metrics.MSpanInuse, serverAddress)
-			sendMetric("gauge", "MSpanSys", metrics.MSpanSys, serverAddress)
-			sendMetric("gauge", "Mallocs", metrics.Mallocs, serverAddress)
-			sendMetric("gauge", "NextGC", metrics.NextGC, serverAddress)
-			sendMetric("gauge", "NumForcedGC", metrics.NumForcedGC, serverAddress)
-			sendMetric("gauge", "NumGC", metrics.NumGC, serverAddress)
-			sendMetric("gauge", "OtherSys", metrics.OtherSys, serverAddress)
-			sendMetric("gauge", "PauseTotalNs", metrics.PauseTotalNs, serverAddress)
-			sendMetric("gauge", "StackInuse", metrics.StackInuse, serverAddress)
-			sendMetric("gauge", "StackSys", metrics.StackSys, serverAddress)
-			sendMetric("gauge", "Sys", metrics.Sys, serverAddress)
-			sendMetric("gauge", "TotalAlloc", metrics.TotalAlloc, serverAddress)
+			sendMetric("gauge", "Alloc", nil, &metrics.Alloc, serverAddress)
+			sendMetric("gauge", "BuckHashSys", nil, &metrics.BuckHashSys, serverAddress)
+			sendMetric("gauge", "Frees", nil, &metrics.Frees, serverAddress)
+			sendMetric("gauge", "GCCPUFraction", nil, &metrics.GCCPUFraction, serverAddress)
+			sendMetric("gauge", "GCSys", nil, &metrics.GCSys, serverAddress)
+			sendMetric("gauge", "HeapAlloc", nil, &metrics.HeapAlloc, serverAddress)
+			sendMetric("gauge", "HeapIdle", nil, &metrics.HeapIdle, serverAddress)
+			sendMetric("gauge", "HeapInuse", nil, &metrics.HeapInuse, serverAddress)
+			sendMetric("gauge", "HeapObjects", nil, &metrics.HeapObjects, serverAddress)
+			sendMetric("gauge", "HeapReleased", nil, &metrics.HeapReleased, serverAddress)
+			sendMetric("gauge", "HeapSys", nil, &metrics.HeapSys, serverAddress)
+			sendMetric("gauge", "LastGC", nil, &metrics.LastGC, serverAddress)
+			sendMetric("gauge", "Lookups", nil, &metrics.Lookups, serverAddress)
+			sendMetric("gauge", "MCacheInuse", nil, &metrics.MCacheInuse, serverAddress)
+			sendMetric("gauge", "MCacheSys", nil, &metrics.MCacheSys, serverAddress)
+			sendMetric("gauge", "MSpanInuse", nil, &metrics.MSpanInuse, serverAddress)
+			sendMetric("gauge", "MSpanSys", nil, &metrics.MSpanSys, serverAddress)
+			sendMetric("gauge", "Mallocs", nil, &metrics.Mallocs, serverAddress)
+			sendMetric("gauge", "NextGC", nil, &metrics.NextGC, serverAddress)
+			sendMetric("gauge", "NumForcedGC", nil, &metrics.NumForcedGC, serverAddress)
+			sendMetric("gauge", "NumGC", nil, &metrics.NumGC, serverAddress)
+			sendMetric("gauge", "OtherSys", nil, &metrics.OtherSys, serverAddress)
+			sendMetric("gauge", "PauseTotalNs", nil, &metrics.PauseTotalNs, serverAddress)
+			sendMetric("gauge", "StackInuse", nil, &metrics.StackInuse, serverAddress)
+			sendMetric("gauge", "StackSys", nil, &metrics.StackSys, serverAddress)
+			sendMetric("gauge", "Sys", nil, &metrics.Sys, serverAddress)
+			sendMetric("gauge", "TotalAlloc", nil, &metrics.TotalAlloc, serverAddress)
 
-			sendMetric("counter", "PollCount", float64(metrics.PollCount), serverAddress)
-			sendMetric("gauge", "RandomValue", metrics.RandomValue, serverAddress)
+			sendMetric("counter", "PollCount", &metrics.PollCount, nil, serverAddress)
+			sendMetric("gauge", "RandomValue", nil, &metrics.RandomValue, serverAddress)
 			time.Sleep(time.Duration(reportInterval) * time.Second)
 		}
 	}()

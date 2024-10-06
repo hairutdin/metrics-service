@@ -35,8 +35,8 @@ func main() {
 
 	metricsHandler := handlers.NewMetricsHandler(memStorage)
 
-	r.Post("/update/", metricsHandler.HandleUpdate)
-	r.Get("/value/{type}/{name}", metricsHandler.HandleGetValue)
+	r.Post("/update/", metricsHandler.HandleUpdateJSON)
+	r.Post("/value/", metricsHandler.HandleGetValueJSON)
 	r.Get("/", metricsHandler.HandleListMetrics)
 
 	fmt.Printf("Server is running at http://%s\n", serverAddress)

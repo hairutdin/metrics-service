@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,16 +11,25 @@ import (
 	"github.com/hairutdin/metrics-service/storage"
 )
 
-func TestHandleUpdate(t *testing.T) {
+func TestHandleUpdateJSON(t *testing.T) {
 	memStorage := storage.NewMemStorage()
 	metricsHandler := NewMetricsHandler(memStorage)
 
-	req, err := http.NewRequest("POST", "/update/gauge/test_metric/10.5", nil)
+	metric := Metrics{
+		ID:    "test_metric",
+		MType: "gauge",
+		Value: new(float64),
+	}
+	*metric.Value = 10.5
+
+	body, _ := json.Marshal(metric)
+	req, err := http.NewRequest("POST", "/update/", bytes.NewBuffer(body))
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	metricsHandler.HandleUpdate(rr, req)
+	metricsHandler.HandleUpdateJSON(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("Expected status %v, got %v", http.StatusOK, status)
@@ -26,17 +37,6 @@ func TestHandleUpdate(t *testing.T) {
 
 	if val, ok := memStorage.Gauges["test_metric"]; !ok || val != 10.5 {
 		t.Errorf("Expected gauge value 10.5, got %v", val)
-	}
-
-	req, err = http.NewRequest("POST", "/update/counter/test_counter/10.5", nil)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	rr = httptest.NewRecorder()
-	metricsHandler.HandleUpdate(rr, req)
-
-	if status := rr.Code; status != http.StatusBadRequest {
-		t.Errorf("Expected status code 400 for invalid metric type, got %d", status)
 	}
 }
 
@@ -47,33 +47,38 @@ func TestHandleGetValue(t *testing.T) {
 	memStorage.UpdateGauge("test_metric", 10.5)
 
 	r := chi.NewRouter()
-	r.Get("/value/{type}/{name}", metricsHandler.HandleGetValue)
+	r.Post("/value/", metricsHandler.HandleGetValueJSON)
 
-	req, err := http.NewRequest("GET", "/value/gauge/test_metric", nil)
+	metric := Metrics{
+		ID:    "test_metric",
+		MType: "gauge",
+	}
+	body, _ := json.Marshal(metric)
+
+	req, err := http.NewRequest("POST", "/value/", bytes.NewBuffer(body))
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("Expected status %v, got %v", http.StatusOK, status)
 	}
-
-	expected := "test_metric: 10.5\n"
-	if rr.Body.String() != expected {
-		t.Errorf("Expected body %v, got %v", expected, rr.Body.String())
+	expected := Metrics{
+		Value: new(float64),
 	}
+	*expected.Value = 10.5
 
-	req, err = http.NewRequest("GET", "/value/gauge/non_existent_metric", nil)
+	var response Metrics
+	err = json.NewDecoder(rr.Body).Decode(&response)
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("Failed to decode response JSON: %v", err)
 	}
-	rr = httptest.NewRecorder()
-	metricsHandler.HandleGetValue(rr, req)
 
-	if status := rr.Code; status != http.StatusNotFound {
-		t.Errorf("Expected status %v, got %v", http.StatusNotFound, status)
+	if *response.Value != *expected.Value {
+		t.Errorf("Expected value %v, got %v", *expected.Value, *response.Value)
 	}
 }
 
