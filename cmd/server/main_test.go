@@ -1,11 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"github.com/hairutdin/metrics-service/handlers"
 	"github.com/hairutdin/metrics-service/storage"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -13,12 +14,24 @@ func TestServer(t *testing.T) {
 	memStorage := storage.NewMemStorage()
 	metricsHandler := handlers.NewMetricsHandler(memStorage)
 
-	http.HandleFunc("/update/", metricsHandler.HandleUpdate)
+	http.HandleFunc("/update/", metricsHandler.HandleUpdateJSON)
 
-	req, err := http.NewRequest("POST", "/update/gauge/test_metric/12.5", nil)
+	metric := handlers.Metrics{
+		ID:    "test_metric",
+		MType: "gauge",
+		Value: func(v float64) *float64 { return &v }(12.5),
+	}
+
+	body, err := json.Marshal(metric)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	req, err := http.NewRequest("POST", "/update/", bytes.NewBuffer(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
 	http.DefaultServeMux.ServeHTTP(rr, req)
@@ -43,8 +56,8 @@ func TestServer(t *testing.T) {
 		t.Errorf("Expected status 200 OK, got %v", status)
 	}
 
-	expectedBody := "<html>"
-	if !strings.Contains(rr.Body.String(), expectedBody) {
+	expectedBody := "<html><body><h1>Metrics</h1></body></html>"
+	if rr.Body.String() != expectedBody {
 		t.Errorf("Expected body %v, got %v", expectedBody, rr.Body.String())
 	}
 }
