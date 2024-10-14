@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -106,12 +107,27 @@ func sendMetric(metricType, metricName string, delta *int64, value *float64, ser
 		panic(err)
 	}
 
+	var buf bytes.Buffer
+
+	gzipWriter := gzip.NewWriter(&buf)
+
+	_, err = gzipWriter.Write(jsonData)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to write to gzip writer: %v", err))
+	}
+
+	if err := gzipWriter.Close(); err != nil {
+		panic(fmt.Sprintf("Failed to close gzip writer: %v", err))
+	}
+
 	url := "http://" + serverAddress + "/update/"
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", url, &buf)
 	if err != nil {
 		panic(err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "gzip")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

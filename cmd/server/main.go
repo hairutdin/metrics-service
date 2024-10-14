@@ -32,6 +32,8 @@ func main() {
 
 	logger := logrus.New()
 	r.Use(middleware.Logger(logger))
+	r.Use(middleware.GzipDecompress)
+	r.Use(middleware.GzipCompress)
 
 	metricsHandler := handlers.NewMetricsHandler(memStorage)
 
