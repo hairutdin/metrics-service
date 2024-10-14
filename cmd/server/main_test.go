@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"github.com/hairutdin/metrics-service/handlers"
+	"github.com/hairutdin/metrics-service/internal/middleware"
 	"github.com/hairutdin/metrics-service/storage"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -59,5 +62,47 @@ func TestServer(t *testing.T) {
 	expectedBody := "<html><body><h1>Metrics</h1></body></html>"
 	if rr.Body.String() != expectedBody {
 		t.Errorf("Expected body %v, got %v", expectedBody, rr.Body.String())
+	}
+}
+
+func TestGzipCompression(t *testing.T) {
+	server := httptest.NewServer(middleware.GzipCompress(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"message": "compressed response"}`))
+	})))
+	defer server.Close()
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.Header.Get("Content-Encoding") != "gzip" {
+		t.Errorf("Expected gzip encoding, got %v", resp.Header.Get("Content-Encoding"))
+	}
+
+	gzReader, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gzReader.Close()
+
+	body, err := io.ReadAll(gzReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedBody := `{"message": "compressed response"}`
+	if string(body) != expectedBody {
+		t.Errorf("Expected body %v, got %v", expectedBody, string(body))
 	}
 }
