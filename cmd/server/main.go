@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hairutdin/metrics-service/handlers"
+	"github.com/hairutdin/metrics-service/internal/db"
 	"github.com/hairutdin/metrics-service/internal/middleware"
 	"github.com/hairutdin/metrics-service/storage"
 	"github.com/sirupsen/logrus"
@@ -38,12 +39,15 @@ func main() {
 	flagStoreInterval := flag.Int("i", 300, "Store interval in seconds")
 	flagFilePath := flag.String("f", "/tmp/metrics-db.json", "File path to save metrics")
 	flagRestore := flag.Bool("r", true, "Restore metrics from file on startup")
+	flagDSN := flag.String("d", "postgres://postgres:berlin@localhost:5432/testdb?sslmode=disable",
+		"PostgreSQL DSN for database connection")
 	flag.Parse()
 
 	envServerAddress := os.Getenv("SERVER_ADDRESS")
 	envStoreInterval := os.Getenv("STORE_INTERVAL")
 	envFilePath := os.Getenv("FILE_STORAGE_PATH")
 	envRestore := os.Getenv("RESTORE")
+	envDSN := os.Getenv("DATABASE_DSN")
 
 	serverAddress := *flagServerAddress
 	if envServerAddress != "" {
@@ -68,19 +72,30 @@ func main() {
 		}
 	}
 
+	dsn := *flagDSN
+	if envDSN != "" {
+		dsn = envDSN
+	}
+
 	if len(flag.Args()) > 0 {
 		fmt.Printf("Error: Unknown flags or arguments: %v\n", flag.Args())
 		os.Exit(1)
 	}
 
 	memStorage := storage.NewMemStorage()
-
 	if restore {
 		err := memStorage.RestoreMetricsFromFile(filePath)
 		if err != nil {
 			fmt.Printf("Error restoring metrics from file: %v\n", err)
 		}
 	}
+
+	err := db.ConnectToDB(dsn)
+	if err != nil {
+		fmt.Printf("Failed to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.CloseDB()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -94,9 +109,11 @@ func main() {
 	r.Use(middleware.GzipCompress)
 
 	metricsHandler := handlers.NewMetricsHandler(memStorage)
+
 	r.Post("/update/", metricsHandler.HandleUpdateJSON)
 	r.Post("/value/", metricsHandler.HandleGetValueJSON)
 	r.Get("/", metricsHandler.HandleListMetrics)
+	r.Get("/ping", handlers.PingHandler(db.PingDB))
 
 	go func() {
 		fmt.Printf("Server is running at http://%s\n", serverAddress)
