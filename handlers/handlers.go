@@ -3,9 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hairutdin/metrics-service/storage"
 	"net/http"
 	"strconv"
+
+	"github.com/hairutdin/metrics-service/storage"
 )
 
 type Metrics struct {
@@ -100,4 +101,18 @@ func (h *MetricsHandler) HandleListMetrics(w http.ResponseWriter, r *http.Reques
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(html))
+}
+
+type PingDBFunc func() error
+
+func PingHandler(pingDB PingDBFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := pingDB()
+		if err != nil {
+			http.Error(w, "Database connection failed", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Database connection is OK"))
+	}
 }

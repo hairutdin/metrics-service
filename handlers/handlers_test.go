@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,54 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/hairutdin/metrics-service/storage"
 )
+
+func TestPingHandlerSuccess(t *testing.T) {
+	mockPingDB := func() error {
+		return nil
+	}
+
+	req, err := http.NewRequest("GET", "/ping", nil)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	rr := httptest.NewRecorder()
+
+	handler := PingHandler(mockPingDB)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Expected status %v, got %v", http.StatusOK, status)
+	}
+
+	expected := "Database connection is OK"
+	if rr.Body.String() != expected {
+		t.Errorf("Expected body %v, got %v", expected, rr.Body.String())
+	}
+}
+
+func TestPingHandlerFailure(t *testing.T) {
+	mockPingDB := func() error {
+		return errors.New("database connection failed")
+	}
+
+	req, err := http.NewRequest("GET", "/ping", nil)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	rr := httptest.NewRecorder()
+
+	handler := PingHandler(mockPingDB)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusInternalServerError {
+		t.Errorf("Expected status %v, got %v", http.StatusInternalServerError, status)
+	}
+
+	expected := "Database connection failed\n"
+	if rr.Body.String() != expected {
+		t.Errorf("Expected body %v, got %v", expected, rr.Body.String())
+	}
+}
 
 func TestHandleUpdateJSON(t *testing.T) {
 	memStorage := storage.NewMemStorage()
