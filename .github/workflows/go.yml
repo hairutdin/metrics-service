@@ -10,7 +10,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  setup:
+  build:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -20,7 +20,6 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: metrics_service
           DATABASE_DSN: "postgres://postgres:postgres@localhost:5432/metrics_service?sslmode=disable"
-
         ports:
           - 5432:5432
         options: >-
@@ -29,9 +28,8 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
-  build:
-    needs: setup
-    runs-on: ubuntu-latest
+    env:
+      DATABASE_DSN: "postgres://postgres:postgres@localhost:5432/metrics_service?sslmode=disable"
 
     steps:
       - uses: actions/checkout@v4
