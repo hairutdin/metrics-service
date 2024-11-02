@@ -37,7 +37,7 @@ jobs:
       
       - name: Wait for PostgreSQL to start
         run: |
-          until psql -U postgres -c "SELECT 1"; do
+          until pg_isready -h localhost -p 5432 -U postgres; do
             echo "Waiting for PostgreSQL to be ready..."
             sleep 1
           done
@@ -47,7 +47,7 @@ jobs:
       
       - name: Build
         run: go build -v ./...
-        
+
       - name: Run Tests
         env:
           DATABASE_DSN: "postgres://postgres:postgres@localhost:5432/metrics_service_test?sslmode=disable"
