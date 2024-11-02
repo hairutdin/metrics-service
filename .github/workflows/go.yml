@@ -43,7 +43,8 @@ jobs:
           done
 
       - name: Create test database
-        run: psql -U postgres -c "CREATE DATABASE metrics_service_test;"
+        run:  psql -h localhost -U postgres -c "CREATE DATABASE metrics_service_test;"
+
       
       - name: Build
         run: go build -v ./...
