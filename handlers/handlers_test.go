@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hairutdin/metrics-service/models"
 	"github.com/hairutdin/metrics-service/storage"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPingHandlerSuccess(t *testing.T) {
@@ -64,7 +66,7 @@ func TestHandleUpdateJSON(t *testing.T) {
 	memStorage := storage.NewMemStorage()
 	metricsHandler := NewMetricsHandler(memStorage)
 
-	metric := Metrics{
+	metric := models.Metrics{
 		ID:    "test_metric",
 		MType: "gauge",
 		Value: new(float64),
@@ -98,7 +100,7 @@ func TestHandleGetValue(t *testing.T) {
 	r := chi.NewRouter()
 	r.Post("/value/", metricsHandler.HandleGetValueJSON)
 
-	metric := Metrics{
+	metric := models.Metrics{
 		ID:    "test_metric",
 		MType: "gauge",
 	}
@@ -115,12 +117,12 @@ func TestHandleGetValue(t *testing.T) {
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("Expected status %v, got %v", http.StatusOK, status)
 	}
-	expected := Metrics{
+	expected := models.Metrics{
 		Value: new(float64),
 	}
 	*expected.Value = 10.5
 
-	var response Metrics
+	var response models.Metrics
 	err = json.NewDecoder(rr.Body).Decode(&response)
 	if err != nil {
 		t.Fatalf("Failed to decode response JSON: %v", err)
@@ -153,4 +155,34 @@ func TestHandleListMetrics(t *testing.T) {
 	if rr.Body.String() != expected {
 		t.Errorf("Expected body %v, got %v", expected, rr.Body.String())
 	}
+}
+
+func TestUpdateMetricsBatchHandler(t *testing.T) {
+	memStorage := storage.NewMemStorage()
+	handler := NewMetricsHandler(memStorage)
+
+	r := chi.NewRouter()
+	r.Post("/updates/", handler.HandleBatchUpdate)
+
+	metrics := []models.Metrics{
+		{ID: "batch_gauge", MType: "gauge", Value: func(v float64) *float64 { val := v; return &val }(52.5)},
+		{ID: "batch_counter", MType: "counter", Delta: func(d int64) *int64 { delta := d; return &delta }(20)},
+	}
+
+	jsonData, err := json.Marshal(metrics)
+	assert.NoError(t, err)
+
+	req, err := http.NewRequest("POST", "/updates/", bytes.NewBuffer(jsonData))
+	assert.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, "Expected status 200 OK")
+
+	gaugeValue, _ := memStorage.GetMetric("gauge", "batch_gauge")
+	counterValue, _ := memStorage.GetMetric("counter", "batch_counter")
+	assert.Equal(t, "52.500000", gaugeValue)
+	assert.Equal(t, "20", counterValue)
 }

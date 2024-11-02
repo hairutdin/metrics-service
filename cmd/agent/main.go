@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/hairutdin/metrics-service/models"
 	"math/rand"
 	"net/http"
 	"os"
@@ -14,12 +15,12 @@ import (
 	"time"
 )
 
-type Metrics struct {
-	ID    string   `json:"id"`
-	MType string   `json:"type"`
-	Delta *int64   `json:"delta,omitempty"`
-	Value *float64 `json:"value,omitempty"`
-}
+// type Metrics struct {
+// 	ID    string   `json:"id"`
+// 	MType string   `json:"type"`
+// 	Delta *int64   `json:"delta,omitempty"`
+// 	Value *float64 `json:"value,omitempty"`
+// }
 
 type RuntimeMetrics struct {
 	Alloc         float64
@@ -95,7 +96,7 @@ func (m *RuntimeMetrics) collectMetrics() {
 }
 
 func sendMetric(metricType, metricName string, delta *int64, value *float64, serverAddress string) {
-	metric := Metrics{
+	metric := models.Metrics{
 		ID:    metricName,
 		MType: metricType,
 		Delta: delta,

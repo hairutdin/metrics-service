@@ -6,15 +6,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/hairutdin/metrics-service/models"
 	"github.com/hairutdin/metrics-service/storage"
 )
-
-type Metrics struct {
-	ID    string   `json:"id"`              // name of the metric
-	MType string   `json:"type"`            // gauge or counter
-	Delta *int64   `json:"delta,omitempty"` // value for counter
-	Value *float64 `json:"value,omitempty"` // value for gauge
-}
 
 type MetricsHandler struct {
 	storage storage.MetricsStorage
@@ -26,7 +20,7 @@ func NewMetricsHandler(s storage.MetricsStorage) *MetricsHandler {
 
 // HandleUpdateJSON handles POST requests to update metrics in JSON format
 func (h *MetricsHandler) HandleUpdateJSON(w http.ResponseWriter, r *http.Request) {
-	var metric Metrics
+	var metric models.Metrics
 	err := json.NewDecoder(r.Body).Decode(&metric)
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
@@ -51,8 +45,25 @@ func (h *MetricsHandler) HandleUpdateJSON(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (h *MetricsHandler) HandleBatchUpdate(w http.ResponseWriter, r *http.Request) {
+	var metricsList []models.Metrics
+
+	if err := json.NewDecoder(r.Body).Decode(&metricsList); err != nil {
+		http.Error(w, "Invalid JSON format", http.StatusBadRequest)
+		return
+	}
+
+	err := h.storage.UpdateMetricsBatch(metricsList)
+	if err != nil {
+		http.Error(w, "Failed to update metrics", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *MetricsHandler) HandleGetValueJSON(w http.ResponseWriter, r *http.Request) {
-	var metric Metrics
+	var metric models.Metrics
 	err := json.NewDecoder(r.Body).Decode(&metric)
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
