@@ -38,6 +38,13 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.23'
+      
+      - name: Set up PostgreSQL
+        run: |
+          psql -U postgres -c "CREATE DATABASE metrics_service_test;"
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
 
       - name: Build
         run: go build -v ./...
