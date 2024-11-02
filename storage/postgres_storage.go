@@ -4,17 +4,26 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hairutdin/metrics-service/internal/middleware"
 	"github.com/hairutdin/metrics-service/models"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type PostgresStorage struct {
-	DB *pgx.Conn
+type PostgresStorageConn interface {
+	Exec(ctx context.Context, query string, args ...interface{}) (pgconn.CommandTag, error)
+	Begin(ctx context.Context) (pgx.Tx, error)
+	QueryRow(ctx context.Context, query string, args ...interface{}) pgx.Row
+	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
 }
 
-func NewPostgresStorage(dbConn *pgx.Conn) *PostgresStorage {
-	return &PostgresStorage{DB: dbConn}
+type PostgresStorage struct {
+	DB PostgresStorageConn
+}
+
+func NewPostgresStorage(conn PostgresStorageConn) *PostgresStorage {
+	return &PostgresStorage{DB: conn}
 }
 
 func (s *PostgresStorage) UpdateGauge(name string, value float64) {
@@ -44,31 +53,35 @@ func (s *PostgresStorage) UpdateCounter(name string, delta int64) {
 }
 
 func (s *PostgresStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
-	tx, err := s.DB.Begin(context.Background())
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(context.Background())
+	operation := func() error {
+		tx, err := s.DB.Begin(context.Background())
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(context.Background())
 
-	for _, metric := range metrics {
-		if metric.MType == "gauge" && metric.Value != nil {
-			_, err := tx.Exec(context.Background(),
-				`INSERT INTO gauge_metrics (name, value) VALUES ($1, $2)
-				 ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value`, metric.ID, *metric.Value)
-			if err != nil {
-				return err
-			}
-		} else if metric.MType == "counter" && metric.Delta != nil {
-			_, err := tx.Exec(context.Background(),
-				`INSERT INTO counter_metrics (name, value) VALUES ($1, $2)
-				 ON CONFLICT (name) DO UPDATE SET value = counter_metrics.value + EXCLUDED.value`, metric.ID, *metric.Delta)
-			if err != nil {
-				return err
+		for _, metric := range metrics {
+			if metric.MType == "gauge" && metric.Value != nil {
+				_, err := tx.Exec(context.Background(),
+					`INSERT INTO gauge_metrics (name, value) VALUES ($1, $2)
+					ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value`, metric.ID, *metric.Value)
+				if err != nil {
+					return err
+				}
+			} else if metric.MType == "counter" && metric.Delta != nil {
+				_, err := tx.Exec(context.Background(),
+					`INSERT INTO counter_metrics (name, value) VALUES ($1, $2)
+					ON CONFLICT (name) DO UPDATE SET value = counter_metrics.value + EXCLUDED.value`, metric.ID, *metric.Delta)
+				if err != nil {
+					return err
+				}
 			}
 		}
+
+		return tx.Commit(context.Background())
 	}
 
-	return tx.Commit(context.Background())
+	return middleware.RetryOperation(operation)
 }
 
 func (s *PostgresStorage) GetMetric(metricType, name string) (string, error) {

@@ -13,15 +13,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hairutdin/metrics-service/internal/middleware"
 	"github.com/hairutdin/metrics-service/models"
 )
-
-// type Metrics struct {
-// 	ID    string   `json:"id"`
-// 	MType string   `json:"type"`
-// 	Delta *int64   `json:"delta,omitempty"`
-// 	Value *float64 `json:"value,omitempty"`
-// }
 
 type RuntimeMetrics struct {
 	Alloc         float64
@@ -139,40 +133,46 @@ func sendMetric(metricType, metricName string, delta *int64, value *float64, ser
 	defer resp.Body.Close()
 }
 
-func sendMetricsBatch(metrics []models.Metrics, serverAddress string) {
-	jsonData, err := json.Marshal(metrics)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to marshal metrics: %v", err))
+func sendMetricsBatch(metrics []models.Metrics, serverAddress string, client *http.Client) error {
+	operation := func() error {
+		jsonData, err := json.Marshal(metrics)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to marshal metrics: %v", err))
+		}
+		var buf bytes.Buffer
+		gzipWriter := gzip.NewWriter(&buf)
+		_, err = gzipWriter.Write(jsonData)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to write to gzip writer: %v", err))
+		}
+
+		if err := gzipWriter.Close(); err != nil {
+			panic(fmt.Sprintf("Failed to close gzip writer: %v", err))
+		}
+
+		url := "http://" + serverAddress + "/updates/"
+		req, err := http.NewRequest("POST", url, &buf)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to create request: %v", err))
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("Failed to send metrics batch: %v\n", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("server responded with status code %d", resp.StatusCode)
+		}
+
+		return nil
 	}
 
-	var buf bytes.Buffer
-	gzipWriter := gzip.NewWriter(&buf)
-	_, err = gzipWriter.Write(jsonData)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to write to gzip writer: %v", err))
-	}
-
-	if err := gzipWriter.Close(); err != nil {
-		panic(fmt.Sprintf("Failed to close gzip writer: %v", err))
-	}
-
-	url := "http://" + serverAddress + "/updates/"
-	req, err := http.NewRequest("POST", url, &buf)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create request: %v", err))
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Printf("Failed to send metrics batch: %v\n", err)
-		return
-	}
-	defer resp.Body.Close()
-
+	return middleware.RetryOperation(operation)
 }
 
 func main() {
@@ -257,7 +257,7 @@ func main() {
 				{ID: "RandomValue", MType: "gauge", Value: &metrics.RandomValue},
 			}
 
-			sendMetricsBatch(metricList, serverAddress)
+			sendMetricsBatch(metricList, serverAddress, http.DefaultClient)
 			time.Sleep(time.Duration(reportInterval) * time.Second)
 		}
 	}()

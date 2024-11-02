@@ -61,7 +61,10 @@ func setupRouter(storage storage.MetricsStorage) *chi.Mux {
 	r.Get("/", metricsHandler.HandleListMetrics)
 	r.Get("/ping", handlers.PingHandler(func() error {
 		if pgStorage, ok := storage.(*metricsStorage.PostgresStorage); ok {
-			return db.PingDB(pgStorage.DB)
+			if conn, ok := pgStorage.DB.(*pgx.Conn); ok {
+				return db.PingDB(conn)
+			}
+			return fmt.Errorf("invalid connection type")
 		}
 		return nil
 	}))
