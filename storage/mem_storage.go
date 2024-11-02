@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hairutdin/metrics-service/models"
 	"os"
 	"sync"
 	"time"
@@ -27,6 +28,19 @@ func (s *MemStorage) UpdateGauge(name string, value float64) {
 	s.Lock()
 	defer s.Unlock()
 	s.Gauges[name] = value
+}
+
+func (ms *MemStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
+	ms.Lock()
+	defer ms.Unlock()
+	for _, metric := range metrics {
+		if metric.MType == "gauge" {
+			ms.Gauges[metric.ID] = *metric.Value
+		} else if metric.MType == "counter" {
+			ms.Counters[metric.ID] += *metric.Delta
+		}
+	}
+	return nil
 }
 
 func (s *MemStorage) UpdateCounter(name string, value int64) {

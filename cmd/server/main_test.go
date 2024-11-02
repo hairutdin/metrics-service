@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/hairutdin/metrics-service/handlers"
 	"github.com/hairutdin/metrics-service/internal/middleware"
+	"github.com/hairutdin/metrics-service/models"
 	"github.com/hairutdin/metrics-service/storage"
 	"github.com/stretchr/testify/assert"
 )
@@ -34,7 +35,7 @@ func testSetupRouter() *chi.Mux {
 
 func TestUpdateMetric(t *testing.T) {
 	router := testSetupRouter()
-	metric := handlers.Metrics{
+	metric := models.Metrics{
 		ID:    "test_metric",
 		MType: "gauge",
 		Value: func(v float64) *float64 { return &v }(12.5),
@@ -58,7 +59,7 @@ func TestGetValueMetric(t *testing.T) {
 	storage.UpdateGauge("test_metric", 12.5)
 	router := setupRouter(storage)
 
-	metric := handlers.Metrics{
+	metric := models.Metrics{
 		ID:    "test_metric",
 		MType: "gauge",
 	}
@@ -75,7 +76,7 @@ func TestGetValueMetric(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code, "Expected status 200 OK")
 
-	var response handlers.Metrics
+	var response models.Metrics
 	err = json.Unmarshal(rr.Body.Bytes(), &response)
 	assert.NoError(t, err)
 

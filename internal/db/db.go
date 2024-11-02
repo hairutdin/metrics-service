@@ -8,25 +8,17 @@ import (
 	"log"
 )
 
-var DB *pgx.Conn
-
-func ConnectToDB(dsn string) error {
-	var err error
-	DB, err = pgx.Connect(context.Background(), dsn)
+func ConnectToDB(dsn string) (*pgx.Conn, error) {
+	conn, err := pgx.Connect(context.Background(), dsn)
 	if err != nil {
 		log.Printf("Unable to connect to database: %v\n", err)
-		return err
+		return nil, err
 	}
 
-	err = initializeTables()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return conn, nil
 }
 
-func initializeTables() error {
+func InitializeTables(conn *pgx.Conn) error {
 	gaugeTableQuery := `
 	CREATE TABLE IF NOT EXISTS gauge_metrics (
 		name TEXT PRIMARY KEY,
@@ -40,12 +32,12 @@ func initializeTables() error {
 	)
 	`
 
-	_, err := DB.Exec(context.Background(), gaugeTableQuery)
+	_, err := conn.Exec(context.Background(), gaugeTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to create gauge_metrics table: %w", err)
 	}
 
-	_, err = DB.Exec(context.Background(), counterTableQuery)
+	_, err = conn.Exec(context.Background(), counterTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to create counter_metrics table: %w", err)
 	}
@@ -53,12 +45,12 @@ func initializeTables() error {
 	return nil
 }
 
-func PingDB() error {
-	return DB.Ping(context.Background())
+func PingDB(conn *pgx.Conn) error {
+	return conn.Ping(context.Background())
 }
 
-func CloseDB() {
-	if DB != nil {
-		DB.Close(context.Background())
+func CloseDB(conn *pgx.Conn) {
+	if conn != nil {
+		conn.Close(context.Background())
 	}
 }

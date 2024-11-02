@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hairutdin/metrics-service/internal/db"
+	"github.com/hairutdin/metrics-service/models"
+
+	"github.com/jackc/pgx/v5"
 )
 
-type PostgresStorage struct{}
+type PostgresStorage struct {
+	DB *pgx.Conn
+}
 
-func NewPostgresStorage() *PostgresStorage {
-	return &PostgresStorage{}
+func NewPostgresStorage(dbConn *pgx.Conn) *PostgresStorage {
+	return &PostgresStorage{DB: dbConn}
 }
 
 func (s *PostgresStorage) UpdateGauge(name string, value float64) {
@@ -21,7 +25,7 @@ func (s *PostgresStorage) UpdateGauge(name string, value float64) {
 		DO UPDATE SET value = EXCLUDED.value;
 	`
 
-	_, err := db.DB.Exec(context.Background(), query, name, value)
+	_, err := s.DB.Exec(context.Background(), query, name, value)
 	if err != nil {
 		fmt.Printf("Error updating gauge metric: %v\n", err)
 	}
@@ -33,10 +37,38 @@ func (s *PostgresStorage) UpdateCounter(name string, delta int64) {
 		VALUES ($1, $2)
 		ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;
 	`
-	_, err := db.DB.Exec(context.Background(), query, name, delta)
+	_, err := s.DB.Exec(context.Background(), query, name, delta)
 	if err != nil {
 		fmt.Printf("Error updating counter metric: %v\n", err)
 	}
+}
+
+func (s *PostgresStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
+	tx, err := s.DB.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	for _, metric := range metrics {
+		if metric.MType == "gauge" && metric.Value != nil {
+			_, err := tx.Exec(context.Background(),
+				`INSERT INTO gauge_metrics (name, value) VALUES ($1, $2)
+				 ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value`, metric.ID, *metric.Value)
+			if err != nil {
+				return err
+			}
+		} else if metric.MType == "counter" && metric.Delta != nil {
+			_, err := tx.Exec(context.Background(),
+				`INSERT INTO counter_metrics (name, value) VALUES ($1, $2)
+				 ON CONFLICT (name) DO UPDATE SET value = counter_metrics.value + EXCLUDED.value`, metric.ID, *metric.Delta)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit(context.Background())
 }
 
 func (s *PostgresStorage) GetMetric(metricType, name string) (string, error) {
@@ -52,7 +84,7 @@ func (s *PostgresStorage) GetMetric(metricType, name string) (string, error) {
 		return "", fmt.Errorf("invalid metric type: %s", metricType)
 	}
 
-	err := db.DB.QueryRow(context.Background(), query, name).Scan(&result)
+	err := s.DB.QueryRow(context.Background(), query, name).Scan(&result)
 	if err != nil {
 		return "", fmt.Errorf("metric not found: %w", err)
 	}
@@ -66,7 +98,7 @@ func (s *PostgresStorage) GetAllMetrics() map[string]string {
 	gaugeQuery := `SELECT name, value FROM gauge_metrics`
 	counterQuery := `SELECT name, value FROM counter_metrics`
 
-	rows, err := db.DB.Query(context.Background(), gaugeQuery)
+	rows, err := s.DB.Query(context.Background(), gaugeQuery)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -78,7 +110,7 @@ func (s *PostgresStorage) GetAllMetrics() map[string]string {
 		}
 	}
 
-	rows, err = db.DB.Query(context.Background(), counterQuery)
+	rows, err = s.DB.Query(context.Background(), counterQuery)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {

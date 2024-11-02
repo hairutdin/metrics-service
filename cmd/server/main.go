@@ -16,18 +16,20 @@ import (
 	"github.com/hairutdin/metrics-service/internal/middleware"
 	"github.com/hairutdin/metrics-service/storage"
 	metricsStorage "github.com/hairutdin/metrics-service/storage"
+	"github.com/jackc/pgx/v5"
 	"github.com/sirupsen/logrus"
 )
 
 func initializeStorage(dsn, filePath string, restore bool) storage.MetricsStorage {
 	if dsn != "" {
-		err := db.ConnectToDB(dsn)
+		conn, err := db.ConnectToDB(dsn)
 		if err == nil {
-			defer db.CloseDB()
 			fmt.Println("Using PostgreSQL storage.")
-			return storage.NewPostgresStorage()
+			db.InitializeTables(conn)
+			return storage.NewPostgresStorage(conn)
 		}
 		fmt.Printf("Failed to connect to PostgreSQL: %v\n", err)
+		defer db.CloseDB(conn)
 	}
 
 	memStorage := storage.NewMemStorage()
@@ -54,9 +56,15 @@ func setupRouter(storage storage.MetricsStorage) *chi.Mux {
 	r.Use(middleware.GzipCompress)
 
 	r.Post("/update/", metricsHandler.HandleUpdateJSON)
+	r.Post("/updates/", metricsHandler.HandleBatchUpdate)
 	r.Post("/value/", metricsHandler.HandleGetValueJSON)
 	r.Get("/", metricsHandler.HandleListMetrics)
-	r.Get("/ping", handlers.PingHandler(db.PingDB))
+	r.Get("/ping", handlers.PingHandler(func() error {
+		if pgStorage, ok := storage.(*metricsStorage.PostgresStorage); ok {
+			return db.PingDB(pgStorage.DB)
+		}
+		return nil
+	}))
 
 	return r
 }
@@ -121,11 +129,13 @@ func main() {
 	dsn := getEnv("DATABASE_DSN", *flagDSN)
 
 	var metricsStorage storage.MetricsStorage
+	var conn *pgx.Conn
+	var err error
 
 	if dsn != "" {
-		if err := db.ConnectToDB(dsn); err == nil {
-			defer db.CloseDB()
-			metricsStorage = storage.NewPostgresStorage()
+		conn, err = db.ConnectToDB(dsn)
+		if err == nil {
+			metricsStorage = storage.NewPostgresStorage(conn)
 			fmt.Println("Using PostgreSQL storage.")
 		} else {
 			fmt.Printf("Failed to connect to PostgreSQL: %v\n", err)
@@ -168,5 +178,8 @@ func main() {
 	fmt.Println("Shutting down server... Saving metrics.")
 	if memStorage, ok := metricsStorage.(*storage.MemStorage); ok {
 		memStorage.SaveMetricsToFile(filePath)
+	}
+	if conn != nil {
+		db.CloseDB(conn)
 	}
 }

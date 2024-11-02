@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/hairutdin/metrics-service/models"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,7 +28,7 @@ func TestSendMetric(t *testing.T) {
 			t.Errorf("Expected application/json content type, got %s", r.Header.Get("Content-Type"))
 		}
 
-		var metric Metrics
+		var metric models.Metrics
 		err := json.NewDecoder(r.Body).Decode(&metric)
 		if err != nil {
 			t.Fatalf("Failed to decode JSON: %v", err)
@@ -49,7 +50,7 @@ func TestSendMetric(t *testing.T) {
 	defer server.Close()
 
 	sendMetric := func(metricType, metricName string, value float64) {
-		metric := Metrics{
+		metric := models.Metrics{
 			ID:    metricName,
 			MType: metricType,
 			Value: &value,

@@ -18,8 +18,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: metrics_service
-          DATABASE_DSN: "postgres://postgres:postgres@localhost:5432/metrics_service?sslmode=disable"
+          POSTGRES_DB: postgres
         ports:
           - 5432:5432
         options: >-
@@ -28,9 +27,6 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
-    env:
-      DATABASE_DSN: "postgres://postgres:postgres@localhost:5432/metrics_service?sslmode=disable"
-
     steps:
       - uses: actions/checkout@v4
     
@@ -38,9 +34,24 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.23'
+      
+      - name: Wait for PostgreSQL to start
+        run: |
+          until pg_isready -h localhost -p 5432 -U postgres; do
+            echo "Waiting for PostgreSQL to be ready..."
+            sleep 1
+          done
 
+      - name: Create test database
+        env:
+          PGPASSWORD: postgres
+        run:  psql -h localhost -U postgres -c "CREATE DATABASE metrics_service_test;"
+
+      
       - name: Build
         run: go build -v ./...
-      
-      - name: Test
+
+      - name: Run Tests
+        env:
+          DATABASE_DSN: "postgres://postgres:postgres@localhost:5432/metrics_service_test?sslmode=disable"
         run: go test -v ./...
